@@ -80,11 +80,7 @@ jobs:
         env:
           GOMEGA_DEFAULT_EVENTUALLY_TIMEOUT: 10s
         run: |
-          go get github.com/pact-foundation/pact-go/v2@2.x.x
-          go install github.com/pact-foundation/pact-go/v2@2.x.x
-          sudo /home/runner/go/bin/pact-go -l DEBUG install 
-          
-          make test
+          make unit-tests
       - uses: chainguard-dev/actions/kind-diag@main
         # Only upload logs on failure.
         if: ${{ failure() }}
@@ -138,16 +134,16 @@ jobs:
         with:
           k8s-version: ${{ env.K8S_VERSION }}
           kind-version: ${{ env.KIND_VERSION }}
+      - name: Install Pact
+        run: |
+          go get github.com/pact-foundation/pact-go/v2@2.x.x
+          go install github.com/pact-foundation/pact-go/v2@2.x.x
+          sudo /home/runner/go/bin/pact-go -l DEBUG install 
       - name: Run Pact Tests
         env:
           GOMEGA_DEFAULT_EVENTUALLY_TIMEOUT: 10s
         run: |
           set -x
-          go get github.com/pact-foundation/pact-go/v2@2.x.x
-          go install github.com/pact-foundation/pact-go/v2@2.x.x
-          sudo /home/runner/go/bin/pact-go -l DEBUG install 
-          oc whoami -c
-          make envtest
           cd pact
           go mod tidy
           make test-verbose

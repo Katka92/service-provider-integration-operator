@@ -4,7 +4,7 @@ LOCALBIN ?= $(shell pwd)/../bin
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 
 test: 
-	make -C ../ -f Makefile manifests generate
+	make -C ../ -f Makefile manifests generate install
 	make test-pact
 
 test-pact:
