@@ -47,8 +47,8 @@ var _ = Describe("Controller", func() {
 
 	createAnonymousState := func() *oauthstate.OAuthInfo {
 		return &oauthstate.OAuthInfo{
-			TokenName:           "mytoken",
-			TokenNamespace:      IT.Namespace,
+			ObjectName:          "mytoken",
+			ObjectNamespace:     IT.Namespace,
 			Scopes:              []string{"a", "b"},
 			ServiceProviderName: config.ServiceProviderTypeGitHub.Name,
 			ServiceProviderUrl:  "https://special.sp",
@@ -126,6 +126,10 @@ var _ = Describe("Controller", func() {
 			RedirectTemplate:    tmpl,
 			StateStorage:        NewStateStorage(IT.SessionManager),
 			ServiceProviderType: config.ServiceProviderTypeGitHub,
+			tokenDataSyncStrategy: SPIAccessTokenSyncStrategy{
+				ClientFactory: IT.ClientFactory,
+				TokenStorage:  IT.TokenStorage,
+			},
 		}
 	}
 
@@ -165,9 +169,11 @@ var _ = Describe("Controller", func() {
 	}
 
 	authenticateFlowQueryParam := func(g Gomega) (*commonController, string, *httptest.ResponseRecorder) {
-		token := grabK8sToken(g)
 		spiState := prepareAnonymousState()
-		req := httptest.NewRequest("GET", fmt.Sprintf("/?state=%s&k8s_token=%s", spiState, token), nil)
+		req := httptest.NewRequest("POST", fmt.Sprintf("/?state=%s", spiState), nil)
+		req.PostForm = url.Values{
+			k8sTokenParameterKey: {grabK8sToken(g)},
+		}
 
 		res := httptest.NewRecorder()
 
@@ -268,7 +274,7 @@ var _ = Describe("Controller", func() {
 
 	When("OAuth initiated", func() {
 		BeforeEach(func() {
-			Expect(IT.InClusterClient.Create(IT.Context, &api.SPIAccessToken{
+			Expect(IT.InClusterClient.Create(ctx, &api.SPIAccessToken{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "mytoken",
 					Namespace: IT.Namespace,
@@ -280,16 +286,16 @@ var _ = Describe("Controller", func() {
 
 			t := &api.SPIAccessToken{}
 			Eventually(func() error {
-				return IT.InClusterClient.Get(IT.Context, client.ObjectKey{Name: "mytoken", Namespace: IT.Namespace}, t)
+				return IT.InClusterClient.Get(ctx, client.ObjectKey{Name: "mytoken", Namespace: IT.Namespace}, t)
 			}).Should(Succeed())
 		})
 
 		AfterEach(func() {
 			t := &api.SPIAccessToken{}
-			Expect(IT.InClusterClient.Get(IT.Context, client.ObjectKey{Name: "mytoken", Namespace: IT.Namespace}, t)).To(Succeed())
-			Expect(IT.InClusterClient.Delete(IT.Context, t)).To(Succeed())
+			Expect(IT.InClusterClient.Get(ctx, client.ObjectKey{Name: "mytoken", Namespace: IT.Namespace}, t)).To(Succeed())
+			Expect(IT.InClusterClient.Delete(ctx, t)).To(Succeed())
 			Eventually(func() error {
-				return IT.InClusterClient.Get(IT.Context, client.ObjectKey{Name: "mytoken", Namespace: IT.Namespace}, t)
+				return IT.InClusterClient.Get(ctx, client.ObjectKey{Name: "mytoken", Namespace: IT.Namespace}, t)
 			}).ShouldNot(Succeed())
 		})
 

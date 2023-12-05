@@ -12,25 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package oauth
+package contracts
 
 import (
-	"context"
-	"net/http"
-
-	"github.com/redhat-appstudio/service-provider-integration-operator/pkg/spi-shared/oauthstate"
+	models "github.com/pact-foundation/pact-go/v2/models"
 )
 
-// Test Controller that do nothing.
-type NopController struct {
-}
-
-func (n NopController) setSyncStrategy(strategy tokenDataSyncStrategy) {
-}
-
-var _ Controller = (*NopController)(nil)
-
-func (n NopController) Authenticate(w http.ResponseWriter, r *http.Request, state *oauthstate.OAuthInfo) {
-}
-func (n NopController) Callback(ctx context.Context, w http.ResponseWriter, r *http.Request, state *oauthstate.OAuthInfo) {
+func setupStateHandler() models.StateHandlers {
+	return models.StateHandlers{}
 }

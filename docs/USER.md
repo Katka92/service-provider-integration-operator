@@ -22,6 +22,7 @@ In this Manual we consider the main SPI use cases as well as give SPI API refere
     - [SPIAccessCheck](#SPIAccessCheck)
     - [SPIFileContentRequest](#SPIFileContentRequest)
 - [Integration with RemoteSecrets](#Integration-with-RemoteSecrets)
+- [OAuth flow for RemoteSecrets](#OAuth-flow-for-RemoteSecrets)
 - [HTTP API Endpoints](#http-api-endpoints)
     - [POST /login](#post-login)
     - [GET {sp_type}/authenticate](#get-sp_typeauthenticate)
@@ -624,6 +625,53 @@ However, there are a few constraints put on RemoteSecret before SPIAccessCheck o
 
 For example RemoteSecret yaml, see [the sample](/samples/remotesecret-for-ac.yaml).
 
+## OAuth Flow for RemoteSecrets
+RemoteSecret now supports OAuth flow. This means you can go through OAuth in the same way as with SPIAccessToken, however
+in this case the OAuth token will be uploaded to RemoteSecret.
+
+### Obtaining OAuth URL
+To trigger OAuth URL generation, RemoteSecret should have a label `appstudio.redhat.com/sp.host` with the value representing
+host part of the service provider URL, such as `github.com`.
+The SPI operator adds the `appstudio.redhat.com/sp.oauthurl` annotation to the RemoteSecret with value representing the
+OAuth URL. Additionally, a condition of type `OAuthURLGenerated` is added to RemoteSecret's `status.conditions` and the
+condition's status will be equal to `True`. See example bellow.
+
+```yaml
+kind: RemoteSecret                                                                                                                                                  
+metadata:                                                                                                                                                           
+  annotations:                                                                                                                                                      
+    appstudio.redhat.com/sp.oauthurl: https://spi-oauth-spi-system.apps.cluster-jssxb.dynamic.opentlc.com/oauth/authenticate?state=eyJvYmplY3ROYW1lIjoidGVzdC1yZW1vdGUtc2VjcmV0Iiwib2JqZWN0TnMiOiJkZWZhdWx0Iiwib2JqZWN0S2luZCI6IlJlbW90ZVNlY3JldCIsInNjb3BlcyI6WyJyZXBvIiwidXNlciJdLCJwcm92aWRlclR5cGUiOiJHaXRIdWIiLCJwcm92aWRlclVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbSJ9                                                                                                                                                                                                                                                                                                                                                                                                           
+  labels:                                                                                                                                                           
+    appstudio.redhat.com/sp.host: github.com
+# ... omitted other fields
+status:                                                                                                                                                             
+  conditions:                                                                                                                                                                                                                                                                                              
+  - lastTransitionTime: "2023-11-02T08:53:21Z"                                                                                                                      
+    message: OAuth URL successfully generated.                                                                                                                      
+    reason: Success                                                                                                                                                 
+    status: "True"                                                                                                                                                  
+    type: OAuthURLGenerated                                                                                                                                          
+```
+
+In case the service provider does not support OAuth, SPI operator will not add the `appstudio.redhat.com/sp.oauthurl` annotation,
+but it will add the `OAuthURLGenerated` condition with status `False` and reason `NotSupported`.
+
+### Finishing OAuth Flow
+Finishing the OAuth flow will result in a RemoteSecret that has 4 data key-value pairs:
+```yaml
+username: "$oauthtoken" # username, hardcoded
+password: # oauth token value, such as "ght_abcd123..."
+tokenType: # token type of the oauth token, most likely "Bearer"
+expiry: # expiry time in Unix Timestamp format, such as "1698912947"
+```
+The username is set to `$oauthtoken` because Quay requires it for authentication and other service provider use just use 
+the token and ignore the username.
+
+### OAuth Scopes
+Currently, there is no feature that allows for selecting which set of scopes should be requested in the OAuth flow.
+Instead, a set of scopes is hardcoded for each service provider to enable read-write access to repository/registry and user.
+
+
 ## HTTP API Endpoints
 
 ### POST /login
@@ -638,19 +686,17 @@ It is not required to call this endpoint, as the session cookie expires in 15 mi
 #### Response
 - 200 - authorization data successfully accepted.
 - 403 - provided authorization header is not valid.
--
+
 ### GET /{sp_type}/authenticate
 This method is used to initiate the OAuth flow. `{sp_type}` refers to the name of the service provider.
 
-This endpoint expects that k8s token provided by `/login` method. The token needs to enable creation of `SPIAccessTokenDataUpdate` objects in the target cluster.
+This endpoint expects that Kubernetes token provided by `/login` method. The token needs to enable creation of `SPIAccessTokenDataUpdate` objects in the target cluster.
 The URL to this endpoint is generated by the SPI operator and can be read from the     status of the `SPIAccessTokenBinding` or `SPIAccessToken` objects.
 
 
 #### Parameters
-- state - The caller must supply the state query parameter which holds the OAuth flow state.
-- k8s_token - the authorization token. It is HIGHLY DISCOURAGED to use this in a GET request. Use the Authorization header instead.
-#### Headers
-Authorization - optional, in the form `“Bearer <token>”`. Either this header, or `k8s_token` query parameter has to be provided.
+- state (query parameter or POST form body parameter) - The caller must supply the state query parameter which holds the OAuth flow state.
+- k8s_token (POST form body parameter) - the Kubernetes authorization token.
 
 #### Response
 - 200 - returns an HTML page with meta http-equiv tag that redirects the caller to the corresponding service provider to perform the OAuth flow.
